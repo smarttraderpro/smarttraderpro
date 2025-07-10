@@ -4,6 +4,7 @@ import Login from './components/Login';
 import Signup from './components/Signup';
 import Dashboard from './components/Dashboard'; // Placeholder for after login
 import Home from './components/Home'; // Placeholder for landing page
+import VerifyAccount from './components/VerifyAccount'; // Import the new component
 import './App.css'; // Basic CSS, can be created later
 
 function App() {
@@ -26,7 +27,7 @@ function App() {
     // For now, just checks presence.
     const storedToken = localStorage.getItem('authToken');
     if (storedToken) {
-      setToken(stored_token);
+      setToken(storedToken); // Corrected variable name
     }
   }, []);
 
@@ -54,6 +55,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login setToken={handleSetToken} />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/verify-account" element={<VerifyAccount />} />
         {token ? (
            <Route path="/dashboard" element={<Dashboard />} />
         ) : (

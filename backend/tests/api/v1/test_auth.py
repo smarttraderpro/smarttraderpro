@@ -8,27 +8,37 @@ from backend.app import schemas, models # For role enum if needed
 from backend.core.config import settings
 
 # Test User Signup
-def test_signup_new_user(test_client: TestClient, db_session: Session):
+def test_signup_new_user(test_client: TestClient, db_session: Session, capsys): # Added capsys
     user_data = {
         "email": "newuser@example.com",
         "password": "new_password123",
         "mobile_number": "1234567890"
     }
     response = test_client.post(f"{settings.API_V1_STR}/auth/signup", json=user_data)
-    assert response.status_code == 201
-    created_user = response.json()
-    assert created_user["email"] == user_data["email"]
-    assert created_user["mobile_number"] == user_data["mobile_number"]
-    assert "id" in created_user
-    assert created_user["is_active"] is True # Default from model or schema
-    assert created_user["is_verified_email"] is False # Default from crud create_user
-    assert created_user["is_verified_mobile"] is False # Default from crud create_user
+    assert response.status_code == 201 # User created (should be inactive)
 
-    # Check user in DB (optional, but good for confirming)
+    response_data = response.json()
+    assert "message" in response_data
+    assert "OTP has been sent" in response_data["message"]
+    assert response_data["email"] == user_data["email"]
+    assert response_data.get("user_id") is not None # Check user_id is returned
+    assert response_data["is_active"] is False # User should be inactive
+    assert response_data["is_verified_email"] is False
+
+    # Check console output for simulated email
+    captured = capsys.readouterr()
+    assert f"Simulating sending OTP to email: {user_data['email']}" in captured.out
+
+    # Check user in DB
     from backend.app.crud import get_user_by_email
     db_user = get_user_by_email(db_session, email=user_data["email"])
     assert db_user is not None
     assert db_user.email == user_data["email"]
+    assert db_user.mobile_number == user_data["mobile_number"]
+    assert db_user.is_active is False
+    assert db_user.is_verified_email is False
+    assert db_user.otp_secret is not None # OTP should be set
+    assert db_user.otp_sent_at is not None
 
 def test_signup_existing_email(test_client: TestClient, test_user: models.User): # test_user fixture creates a user
     user_data = {
@@ -87,11 +97,29 @@ def test_login_success_with_mobile(test_client: TestClient, db_session: Session)
         "password": "mobilepassword",
         "mobile_number": "1122334455"
     }
-    test_client.post(f"{settings.API_V1_STR}/auth/signup", json=signup_data) # Create the user
+    signup_response = test_client.post(f"{settings.API_V1_STR}/auth/signup", json=signup_data) # Create the user
+    assert signup_response.status_code == 201 # User created, inactive
 
-    login_data = {"username": "1122334455", "password": "mobilepassword"} # Login with mobile
+    # Activate the user by verifying their email OTP
+    # This requires fetching the user from DB to get the OTP that was auto-sent to email
+    from backend.app.crud import get_user_by_email
+    db_user = get_user_by_email(db_session, email=signup_data["email"])
+    assert db_user is not None
+    assert db_user.is_active is False # Should be inactive
+
+    stored_otp = db_user.otp_secret
+    assert stored_otp is not None # OTP should have been generated and stored
+
+    # Verify the email OTP to activate the account
+    verify_request_data = {"identifier": signup_data["email"], "otp": stored_otp}
+    response_verify = test_client.post(f"{settings.API_V1_STR}/auth/verify-otp", json=verify_request_data)
+    assert response_verify.status_code == 200
+    assert response_verify.json()["is_active"] is True # User should be active now
+
+    # Now, attempt to login using the mobile number
+    login_data = {"username": signup_data["mobile_number"], "password": "mobilepassword"} # Login with mobile
     response = test_client.post(f"{settings.API_V1_STR}/auth/login", json=login_data)
-    assert response.status_code == 200
+    assert response.status_code == 200 # Login should now succeed
     tokens = response.json()
     assert "access_token" in tokens
 
@@ -214,11 +242,16 @@ def test_verify_otp_email_success(test_client: TestClient, test_user: models.Use
     # 2. Verify OTP
     verify_request_data = {"identifier": test_user.email, "otp": stored_otp}
     response = test_client.post(f"{settings.API_V1_STR}/auth/verify-otp", json=verify_request_data)
-    assert response.status_code == 200
-    assert f"Email {test_user.email} verified successfully" in response.json()["message"]
 
-    db_session.refresh(test_user)
+    assert response.status_code == 200
+    response_data = response.json()
+    assert f"Email {test_user.email} verified and account activated successfully" in response_data["message"]
+    assert response_data["is_active"] is True
+    assert response_data["is_verified_email"] is True
+
+    db_session.refresh(test_user) # Refresh the test_user object from the DB
     assert test_user.is_verified_email is True
+    assert test_user.is_active is True # User should now be active
     assert test_user.otp_secret is None # OTP should be cleared after verification
 
 def test_verify_otp_mobile_success(test_client: TestClient, db_session: Session):
@@ -229,7 +262,8 @@ def test_verify_otp_mobile_success(test_client: TestClient, db_session: Session)
         "mobile_number": "7778889999"
     }
     signup_res = test_client.post(f"{settings.API_V1_STR}/auth/signup", json=user_data)
-    user_id = signup_res.json()["id"]
+    assert signup_res.status_code == 201 # Ensure signup was successful
+    user_id = signup_res.json()["user_id"] # Corrected key
 
     otp_request_data = {"identifier": user_data["mobile_number"]}
     test_client.post(f"{settings.API_V1_STR}/auth/send-otp", json=otp_request_data)

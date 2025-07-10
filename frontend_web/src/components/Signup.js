@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { signupUser, sendOtp, verifyOtp as verifyOtpApi } from '../api'; // Renamed verifyOtp to avoid conflict
+import { useNavigate, Link } from 'react-router-dom'; // Added Link
+import { signupUser } from '../api';
 
 function Signup() {
   const [email, setEmail] = useState('');
-  const [mobile, setMobile] = useState('');
+  const [mobile, setMobile] = useState(''); // Optional
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-
-  const [otp, setOtp] = useState('');
-  const [otpSentTo, setOtpSentTo] = useState(''); // 'email' or 'mobile'
-  const [otpVerifiedFor, setOtpVerifiedFor] = useState(''); // 'email' or 'mobile' after successful verification
 
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -25,20 +21,28 @@ function Signup() {
       setError("Passwords do not match.");
       return;
     }
-    if (!otpVerifiedFor) { // Check if primary identifier (e.g. email) is OTP verified
-        setError("Please verify your email or mobile with OTP before signing up.");
-        return;
-    }
 
     try {
-      const userData = { email, password };
-      if (mobile) {
-        userData.mobile_number = mobile;
-      }
+      const userData = {
+        email,
+        password,
+        // Only include mobile_number if it's provided
+        ...(mobile && { mobile_number: mobile })
+      };
 
-      const response = await signupUser(userData);
-      setMessage(`Signup successful for ${response.data.email}! You can now login.`);
-      // navigate('/login'); // Or auto-login and redirect to dashboard
+      const response = await signupUser(userData); // Calls backend /auth/signup
+
+      // Backend now returns a message like:
+      // {"message": "Signup successful. An OTP has been sent to your email for verification.", ...}
+      setMessage(response.data.message || "Signup successful. Please check your email to verify your account.");
+
+      // Optionally, clear form or redirect
+      // navigate('/verify-account'); // Or provide a link/button
+      setEmail('');
+      setMobile('');
+      setPassword('');
+      setConfirmPassword('');
+
     } catch (err) {
       if (err.response && err.response.data && err.response.data.detail) {
         setError(err.response.data.detail);
@@ -49,91 +53,72 @@ function Signup() {
     }
   };
 
-  const handleSendOtp = async (identifierType) => {
-    setError('');
-    setMessage('');
-    const identifierValue = identifierType === 'email' ? email : mobile;
-    if (!identifierValue) {
-        setError(`Please enter your ${identifierType} first.`);
-        return;
-    }
-    try {
-        await sendOtp(identifierValue);
-        setOtpSentTo(identifierType);
-        setMessage(`OTP sent to your ${identifierType}. Please check and enter below.`);
-    } catch (err) {
-        if (err.response && err.response.data && err.response.data.detail) {
-            setError(err.response.data.detail);
-          } else {
-            setError(`Failed to send OTP to ${identifierType}.`);
-          }
-        console.error('Send OTP error:', err);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    setError('');
-    setMessage('');
-    if (!otpSentTo || !otp) {
-        setError("Please request and enter OTP first.");
-        return;
-    }
-    const identifierValue = otpSentTo === 'email' ? email : mobile;
-    try {
-        await verifyOtpApi(identifierValue, otp); // Using verifyOtpApi
-        setOtpVerifiedFor(otpSentTo);
-        setMessage(`${otpSentTo.charAt(0).toUpperCase() + otpSentTo.slice(1)} verified successfully! You can now complete signup.`);
-        setOtp(''); // Clear OTP field
-        setOtpSentTo(''); // Reset otpSentTo
-    } catch (err) {
-        if (err.response && err.response.data && err.response.data.detail) {
-            setError(err.response.data.detail);
-          } else {
-            setError("OTP verification failed.");
-          }
-        console.error('Verify OTP error:', err);
-    }
-  }
-
   return (
     <div>
       <h2>Signup</h2>
       <form onSubmit={handleSignup}>
         <div>
           <label htmlFor="email">Email:</label>
-          <input type="email" id="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={otpVerifiedFor === 'email'}/>
-          {otpSentTo !== 'email' && otpVerifiedFor !== 'email' && <button type="button" onClick={() => handleSendOtp('email')}>Send OTP to Email</button>}
-          {otpVerifiedFor === 'email' && <span> (Verified)</span>}
+          <input
+            type="email"
+            id="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
         </div>
-
-        {otpSentTo === 'email' && otpVerifiedFor !== 'email' && (
-            <div>
-                <label htmlFor="otpEmail">Email OTP:</label>
-                <input type="text" id="otpEmail" value={otp} onChange={(e) => setOtp(e.target.value)} />
-                <button type="button" onClick={handleVerifyOtp}>Verify Email OTP</button>
-            </div>
-        )}
 
         <div>
           <label htmlFor="mobile">Mobile Number (Optional):</label>
-          <input type="tel" id="mobile" value={mobile} onChange={(e) => setMobile(e.target.value)} disabled={otpVerifiedFor === 'mobile'}/>
-          {/* Basic OTP for mobile if provided and not yet verified */}
-          {/* More complex logic needed if mobile is also a primary verification method */}
+          <input
+            type="tel"
+            id="mobile"
+            value={mobile}
+            onChange={(e) => setMobile(e.target.value)}
+            placeholder="e.g., 1234567890"
+          />
         </div>
 
         <div>
           <label htmlFor="password">Password:</label>
-          <input type="password" id="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <input
+            type="password"
+            id="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength="8"
+          />
         </div>
         <div>
           <label htmlFor="confirmPassword">Confirm Password:</label>
-          <input type="password" id="confirmPassword" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+          <input
+            type="password"
+            id="confirmPassword"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            minLength="8"
+          />
         </div>
 
         {error && <p style={{ color: 'red' }}>{error}</p>}
-        {message && <p style={{ color: 'green' }}>{message}</p>}
-        <button type="submit" disabled={!otpVerifiedFor}>Signup</button>
+        {message && (
+          <div>
+            <p style={{ color: 'green' }}>{message}</p>
+            {/* Add a link to the verification page if signup was successful and requires verification */}
+            {message.toLowerCase().includes("otp has been sent") && (
+              <p>
+                <Link to="/verify-account">Click here to Verify Account</Link>
+              </p>
+            )}
+          </div>
+        )}
+        <button type="submit">Signup</button>
       </form>
+      <p>
+        Already have an account? <Link to="/login">Login here</Link>
+      </p>
     </div>
   );
 }

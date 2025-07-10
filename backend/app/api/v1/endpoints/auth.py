@@ -11,7 +11,8 @@ from backend.core.config import settings
 
 router = APIRouter()
 
-@router.post("/signup", response_model=schemas.UserPublic, status_code=status.HTTP_201_CREATED)
+# Changed response model as the structure is now a custom message dict
+@router.post("/signup", status_code=status.HTTP_201_CREATED)
 def signup_user(
     *,
     db: Session = Depends(get_db),
@@ -42,8 +43,34 @@ def signup_user(
                 detail="An account with this mobile number already exists."
             )
 
-    user = crud.create_user(db=db, user=user_in)
-    return user
+    # Create the user (will be inactive by default as per updated crud.create_user)
+    new_user = crud.create_user(db=db, user=user_in)
+
+    # Generate OTP, store it, and send it to the user's email for verification
+    try:
+        otp = generate_otp()
+        crud.set_user_otp(db, user=new_user, otp=otp)
+        send_otp_email(email_to=new_user.email, otp=otp) # Simulated email sending
+    except Exception as e:
+        # If OTP sending fails, this is problematic.
+        # For now, we might still return success for user creation but log the OTP error.
+        # Or, we could roll back user creation, but that's more complex.
+        # A robust system might queue OTP sending or have retries.
+        print(f"Error sending OTP during signup for user {new_user.email}: {e}")
+        # Potentially raise an HTTPException or return a specific error response part
+        # For now, we'll let the user be created but OTP might not have "sent".
+        # The user can request a new OTP later via /send-otp if needed.
+
+    return {
+        "message": "Signup successful. An OTP has been sent to your email for verification.",
+        "user_id": new_user.id,
+        "email": new_user.email,
+        "is_active": new_user.is_active, # Will be False
+        "is_verified_email": new_user.is_verified_email # Will be False
+    }
+    # Note: We are not returning the full UserPublic schema here anymore,
+    # as the user is not yet fully "usable" in the same way.
+    # Client should guide user to OTP verification.
 
 
 @router.post("/login", response_model=schemas.Token)
@@ -201,21 +228,35 @@ async def verify_user_otp(
         )
 
     # OTP is correct and not expired.
-    # Now, perform the action this OTP was intended for.
-    # For example, if it was for email verification:
+    message = "OTP verified successfully." # Default message
+
     identifier_str = str(otp_verify_request.identifier)
+    action_taken = False
+
     if "@" in identifier_str and user.email == identifier_str:
-        crud.verify_user_email(db, user=user)
-        message = f"Email {user.email} verified successfully."
-    # Example for mobile verification:
+        # This OTP is for email verification and account activation
+        activated_user = crud.activate_user_and_verify_email(db, user=user)
+        message = f"Email {activated_user.email} verified and account activated successfully."
+        action_taken = True
     elif user.mobile_number == identifier_str: # Identifier was mobile
+        # This OTP is for mobile verification (does not activate account by default in this flow)
         crud.verify_user_mobile(db, user=user)
         message = f"Mobile number {user.mobile_number} verified successfully."
-    else:
-        # Generic success if specific action isn't tied here
-        message = "OTP verified successfully."
+        action_taken = True
 
-    crud.clear_user_otp(db, user=user) # Clear OTP after successful verification
+    if not action_taken:
+        # If OTP was valid but identifier didn't match a specific verification action known here
+        # (e.g. future 2FA OTP), it's still a successful OTP verification for that context.
+        # For now, this path means it wasn't for email or mobile verification as defined above.
+        pass # message remains "OTP verified successfully."
 
-    return {"message": message, "user_id": user.id, "email_verified": user.is_verified_email, "mobile_verified": user.is_verified_mobile }
+    crud.clear_user_otp(db, user=user) # Clear OTP after successful verification regardless of specific action
+
+    return {
+        "message": message,
+        "user_id": user.id,
+        "is_active": user.is_active, # Reflects activation status
+        "is_verified_email": user.is_verified_email,
+        "is_verified_mobile": user.is_verified_mobile
+    }
     # Optionally return user object: return schemas.UserPublic.from_orm(user)

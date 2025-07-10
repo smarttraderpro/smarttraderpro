@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, Union
 
 from . import models, schemas
-from backend.core.security import get_password_hash, verify_password
+from backend.core.security import get_password_hash, verify_password # verify_password was unused, but good to keep for now
 
 # User CRUD operations
 def get_user(db: Session, user_id: int) -> Optional[models.User]:
@@ -32,13 +32,13 @@ def create_user(db: Session, user: schemas.UserCreate) -> models.User:
         email=user.email,
         mobile_number=user.mobile_number,
         password_hash=hashed_password,
-        role=user.role, # Role comes from UserCreate, defaults to CLIENT if not provided
-        broker_preference=user.broker_preference # Defaults to NONE if not provided
-        # is_active can be True by default, or False until email verification
-    ) # Correctly close the User constructor here
-    # By default, email and mobile are not verified
-    db_user.is_verified_email = False
-    db_user.is_verified_mobile = False
+        role=user.role,
+        broker_preference=user.broker_preference,
+        # Explicitly set new user status, overriding model defaults if necessary
+        is_active=False,
+        is_verified_email=False,
+        is_verified_mobile=False
+    )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -47,55 +47,36 @@ def create_user(db: Session, user: schemas.UserCreate) -> models.User:
 def update_user(
     db: Session,
     db_user: models.User,
-    user_in: Union[schemas.UserUpdate, schemas.BrokerAPICredentialsUpdate], # Accept either for flexibility
+    user_in: Union[schemas.UserUpdate, schemas.BrokerAPICredentialsUpdate],
     original_email: Optional[str] = None,
     original_mobile_number: Optional[str] = None
 ) -> models.User:
     user_data = user_in.model_dump(exclude_unset=True)
 
-    # Store new email/mobile if present, before applying all data
     new_email = user_data.get("email")
     new_mobile_number = user_data.get("mobile_number")
 
-    # Apply standard field updates (excluding specific encrypted fields for now)
     for key, value in user_data.items():
-        if key not in ['api_key', 'api_secret', 'access_token', 'refresh_token']: # Avoid direct set of these
+        if key not in ['api_key', 'api_secret', 'access_token', 'refresh_token']:
             setattr(db_user, key, value)
 
-    # If password needs to be updated, it should be handled by a separate function.
-
-    # Encrypt broker API credentials if they are being updated
     from backend.core.security import encrypt_data
-    if 'api_key' in user_data and user_data['api_key'] is not None:
+    if 'api_key' in user_data: # Handles both value and None
         db_user.api_key_encrypted = encrypt_data(user_data.pop('api_key'))
-    elif 'api_key' in user_data and user_data['api_key'] is None: # Explicitly nulling out
-        db_user.api_key_encrypted = None
-
-    if 'api_secret' in user_data and user_data['api_secret'] is not None:
+    if 'api_secret' in user_data:
         db_user.api_secret_encrypted = encrypt_data(user_data.pop('api_secret'))
-    elif 'api_secret' in user_data and user_data['api_secret'] is None:
-        db_user.api_secret_encrypted = None
-
-    if 'access_token' in user_data and user_data['access_token'] is not None:
+    if 'access_token' in user_data:
         db_user.access_token_encrypted = encrypt_data(user_data.pop('access_token'))
-    elif 'access_token' in user_data and user_data['access_token'] is None:
-        db_user.access_token_encrypted = None
-
-    if 'refresh_token' in user_data and user_data['refresh_token'] is not None:
+    if 'refresh_token' in user_data:
         db_user.refresh_token_encrypted = encrypt_data(user_data.pop('refresh_token'))
-    elif 'refresh_token' in user_data and user_data['refresh_token'] is None:
-        db_user.refresh_token_encrypted = None
 
-    # Reset verification status if email/mobile changed
     if original_email is not None and new_email is not None and new_email != original_email:
         db_user.is_verified_email = False
 
     if original_mobile_number is not None and new_mobile_number is not None and new_mobile_number != original_mobile_number:
         db_user.is_verified_mobile = False
-    # If new mobile is provided and original was None, also reset.
-    elif original_mobile_number is None and new_mobile_number is not None:
+    elif original_mobile_number is None and new_mobile_number is not None: # Adding mobile for the first time
         db_user.is_verified_mobile = False
-
 
     db.add(db_user)
     db.commit()
@@ -104,15 +85,11 @@ def update_user(
 
 
 def authenticate_user(db: Session, username: Union[str, int], password: str) -> Optional[models.User]:
-    """
-    Authenticates a user by email/mobile and password.
-    Returns the user object if authentication is successful, otherwise None.
-    """
     user = get_user_by_email_or_mobile(db, username)
     if not user:
         return None
-    if not user.is_active: # Optional: check if user is active
-        return None # Or raise an exception for inactive user
+    # Removed: if not user.is_active: return None
+    # The endpoint /auth/login will handle the is_active check to give a specific response.
     if not verify_password(password, user.password_hash):
         return None
     return user
@@ -120,9 +97,8 @@ def authenticate_user(db: Session, username: Union[str, int], password: str) -> 
 
 # OTP Management for User
 def set_user_otp(db: Session, user: models.User, otp: str) -> models.User:
-    """Sets OTP and its sent time for a user."""
-    from datetime import datetime, timezone # Ensure timezone aware
-    user.otp_secret = otp # Storing OTP directly for simplicity
+    from datetime import datetime, timezone
+    user.otp_secret = otp
     user.otp_sent_at = datetime.now(timezone.utc)
     db.add(user)
     db.commit()
@@ -130,16 +106,14 @@ def set_user_otp(db: Session, user: models.User, otp: str) -> models.User:
     return user
 
 def clear_user_otp(db: Session, user: models.User) -> models.User:
-    """Clears OTP details for a user, typically after successful verification."""
     user.otp_secret = None
     user.otp_sent_at = None
-    # Depending on use case, might also mark email/mobile as verified here
     db.add(user)
     db.commit()
     db.refresh(user)
     return user
 
-def verify_user_email(db: Session, user: models.User) -> models.User:
+def verify_user_email(db: Session, user: models.User) -> models.User: # Kept for direct use if needed
     user.is_verified_email = True
     db.add(user)
     db.commit()
@@ -153,8 +127,16 @@ def verify_user_mobile(db: Session, user: models.User) -> models.User:
     db.refresh(user)
     return user
 
+def activate_user_and_verify_email(db: Session, user: models.User) -> models.User:
+    user.is_verified_email = True
+    user.is_active = True
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
-# Subscription Plan CRUD (example, can be expanded)
+
+# Subscription Plan CRUD
 def get_subscription_plan(db: Session, plan_id: int) -> Optional[models.SubscriptionPlan]:
     return db.query(models.SubscriptionPlan).filter(models.SubscriptionPlan.id == plan_id).first()
 
@@ -167,5 +149,3 @@ def create_subscription_plan(db: Session, plan: schemas.SubscriptionPlanCreate) 
     db.commit()
     db.refresh(db_plan)
     return db_plan
-
-# TODO: Add CRUD for other models as needed (BrokerAPICredentials, etc.)
