@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: . # Dockerfile is in the root directory
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000" # Map host port 8000 to container port 8000
+    volumes:
+      # For development, you might want to mount the backend code
+      # to see changes without rebuilding the image.
+      # For production, typically you build the code into the image.
+      # The Dockerfile now copies backend to /app/backend and WORKDIR is /app
+      - ./backend:/app/backend
+      - ./alembic.ini:/app/alembic.ini # Also mount alembic.ini for dev convenience
+    environment:
+      # Pass environment variables from .env file or directly
+      # These will override defaults in backend.core.config.py if Pydantic settings loads .env
+      - POSTGRES_SERVER=db # Service name of the PostgreSQL container
+      - POSTGRES_USER=${POSTGRES_USER:-smarttrader} # Use env var or default
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-smarttraderdb}
+      - SECRET_KEY=${SECRET_KEY:-a_very_secret_key_for_jwt_hs256_docker} # Change this!
+      - CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY:-your_32_byte_url_safe_base64_encoded_key_docker} # Change this!
+      # Add other necessary environment variables for your FastAPI app
+      # E.g., API_V1_STR, ACCESS_TOKEN_EXPIRE_MINUTES etc. if they need to be configurable
+    depends_on:
+      db:
+        condition: service_healthy # Wait for DB to be healthy before starting backend
+    networks:
+      - smarttrader_network
+
+  db:
+    image: postgres:15-alpine # Using PostgreSQL 15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/ # Persist database data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-smarttrader}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-smarttraderdb}
+    ports:
+      - "5432:5432" # Expose PostgreSQL port to host (optional, for direct access)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smarttrader} -d ${POSTGRES_DB:-smarttraderdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smarttrader_network
+
+volumes:
+  postgres_data: # Define the named volume for data persistence
+
+networks:
+  smarttrader_network:
+    driver: bridge
+
+# To run:
+# 1. (Optional) Create a .env file in the same directory as docker-compose.yml
+#    with your desired environment variables (e.g., POSTGRES_USER, POSTGRES_PASSWORD, SECRET_KEY).
+#    Example .env file:
+#    POSTGRES_USER=myuser
+#    POSTGRES_PASSWORD=mypassword
+#    POSTGRES_DB=mydb
+#    SECRET_KEY=mysupersecretkeypleasereplacethis
+#    CREDENTIALS_ENCRYPTION_KEY=mysecureencryptionkeygeneratedbyfernet
+#
+# 2. Build and run the services:
+#    docker-compose up --build
+#
+# 3. To run in detached mode:
+#    docker-compose up --build -d
+#
+# 4. To stop the services:
+#    docker-compose down
+#
+# 5. Running Alembic migrations:
+#    After `docker-compose up -d db` (to start only the DB):
+#    You can run migrations against the containerized DB in a few ways:
+#    a) From your host machine, if DB port 5432 is exposed and your local Alembic is configured
+#       to point to localhost:5432.
+#    b) By running Alembic inside a temporary container or an exec session in the backend container:
+#       `docker-compose exec backend alembic -c backend/alembic.ini upgrade head`
+#       (This requires alembic.ini to be copied into the image or backend code to be mounted,
+#        and that alembic.ini points to `db` as the hostname for PostgreSQL.)
+#       The current `backend/core/config.py` and `alembic.ini` setup uses `settings.DATABASE_URL`
+#       which will be formed using POSTGRES_SERVER=db from the environment variables for the backend service.
+#       So, running `alembic upgrade head` inside the `backend` container should work.
+#       Ensure `alembic.ini` is present at `backend/alembic.ini` if running from the `backend` directory context
+#       or `/app_backend/alembic.ini` if running from `/app_backend` context with `-c alembic.ini`.
+#       The `alembic.ini` in the project root is used by default if running `alembic` from project root.
+#       The Dockerfile copies the `backend` folder into `/app_backend`.
+#       The `alembic.ini` in the project root has `script_location = %(here)s/backend/alembic`.
+#       If running alembic from within the container's `/app_backend` WORKDIR, you might need to adjust paths
+#       or ensure `alembic.ini` is also copied to `/app_backend` and used with `-c /app_backend/alembic.ini`.
+#       Alternatively, ensure PYTHONPATH is set correctly in the container for alembic to find `backend.app.models`.
+#       The current Dockerfile CMD should set up the environment sufficiently for the app to run.
+#       For migrations, `docker-compose exec backend alembic -c /app/alembic.ini upgrade head` might be feasible
+#       if `alembic.ini` was copied to `/app` (project root inside container) and `script_location` adjusted,
+#       or if the `backend` service WORKDIR was `/app` and code was in `/app/backend`.
+#
+#       Given current Dockerfile WORKDIR /app_backend and COPY ./backend /app_backend/backend,
+#       and assuming alembic.ini is at the project root on the host, it's not copied by default.
+#       If we mount ./backend:/app_backend/backend, then alembic.ini is not in the mount.
+#       It's simpler to copy alembic.ini into the image if we want to run migrations from within.
+#       Let's adjust Dockerfile to copy alembic.ini and set WORKDIR to /app to match host structure.
+
+# Consider creating a .dockerignore file to exclude .git, .venv, __pycache__, etc. from the build context.

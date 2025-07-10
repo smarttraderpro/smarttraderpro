@@ -1,0 +1,73 @@
+# .dockerignore
+
+# Git files
+.git
+.gitignore
+
+# Python virtual environment
+.venv
+venv/
+env/
+
+# Python bytecode and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE and OS specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Test reports
+htmlcov/
+.coverage
+coverage.xml
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Node.js
+frontend_web/node_modules/
+frontend_desktop/node_modules/ # If it uses Node.js
+mobile_app/node_modules/ # If React Native or similar
+
+# Frontend build outputs (if not served by Python backend in the same image)
+frontend_web/build/
+# frontend_desktop/dist/ # Example for Electron builds
+# mobile_app/build/ # Example for Flutter/RN builds
+
+
+# Specific to this project structure if frontend is never part of backend image
+frontend_web/
+frontend_desktop/
+mobile_app/
+
+# Test files if not needed in production image (though sometimes useful)
+# backend/tests/
+
+# Local instance data (if any)
+# instance/
+# *.sqlite3 # If using SQLite for local dev outside Docker volume
+
+# Secrets / Local config not for image
+.env # If .env files are used for local docker-compose but not baked into image
+*.local
+
+# Docker related files if they are in subdirs and not meant for this build context
+# Dockerfile # If there are other Dockerfiles in subdirs
+# docker-compose.yml # If there are other compose files in subdirs
+
+# Logs
+*.log

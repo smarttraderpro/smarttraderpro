@@ -1,0 +1,19 @@
+# backend/requirements.txt
+# Python dependencies will be listed here
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+psycopg2-binary
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart # For form data, file uploads (might be needed for profile pictures etc.)
+pydantic[email] # For email validation in pydantic models
+pydantic-settings
+
+# For testing
+pytest
+httpx # For making async requests in tests
+
+# For encryption
+cryptography
