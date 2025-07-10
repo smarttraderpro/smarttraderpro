@@ -19,3 +19,4 @@ httpx # For making async requests in tests
 cryptography
 yfinance
 pytest-asyncio # For testing async code with pytest
+smartapi-python # For AngelOne Broker Integration (assuming this is the V2 compatible SDK or its latest version)

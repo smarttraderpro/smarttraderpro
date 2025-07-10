@@ -62,6 +62,21 @@ export const fetchLiveIndices = () => {
   return apiClient.get('/market/live-indices');
 };
 
+// AngelOne Broker API calls
+export const fetchAngelOneProfile = (pin, totp) => {
+  const headers = {};
+  if (pin) headers['X-Angelone-Pin'] = pin;
+  if (totp) headers['X-Angelone-Totp'] = totp;
+  return apiClient.get('/angelone/profile', { headers });
+};
+
+export const fetchAngelOneHoldings = (pin, totp) => {
+  const headers = {};
+  if (pin) headers['X-Angelone-Pin'] = pin;
+  if (totp) headers['X-Angelone-Totp'] = totp;
+  return apiClient.get('/angelone/holdings', { headers });
+};
+
 
 // Add other API functions as needed for different modules
 

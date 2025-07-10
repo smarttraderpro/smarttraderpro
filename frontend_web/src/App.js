@@ -5,6 +5,8 @@ import Signup from './components/Signup';
 import Dashboard from './components/Dashboard'; // Placeholder for after login
 import Home from './components/Home'; // Placeholder for landing page
 import VerifyAccount from './components/VerifyAccount'; // Import the new component
+import Profile from './components/Profile'; // Import Profile component
+import Portfolio from './components/Portfolio'; // Import Portfolio component
 import './App.css'; // Basic CSS, can be created later
 
 function App() {
@@ -45,6 +47,8 @@ function App() {
           ) : (
             <>
               <li><Link to="/dashboard">Dashboard</Link></li>
+              <li><Link to="/portfolio">Portfolio</Link></li>
+              <li><Link to="/profile">Profile & Settings</Link></li>
               <li><button onClick={handleLogout}>Logout</button></li>
             </>
           )}
@@ -57,11 +61,18 @@ function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/verify-account" element={<VerifyAccount />} />
         {token ? (
-           <Route path="/dashboard" element={<Dashboard />} />
+          <>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/portfolio" element={<Portfolio />} />
+          </>
         ) : (
-          // Redirect to login if trying to access dashboard without token
-          // This is a simple way, protected routes are better for complex apps
-          <Route path="/dashboard" element={<Login setToken={handleSetToken} />} />
+          // Redirect to login if trying to access protected routes without token
+          <>
+            <Route path="/dashboard" element={<Login setToken={handleSetToken} />} />
+            <Route path="/profile" element={<Login setToken={handleSetToken} />} />
+            <Route path="/portfolio" element={<Login setToken={handleSetToken} />} />
+          </>
         )}
       </Routes>
     </div>

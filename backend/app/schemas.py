@@ -1,6 +1,6 @@
 # backend/app/schemas.py
 from pydantic import BaseModel, EmailStr, constr, Field
-from typing import Optional, Union
+from typing import Optional, Union, List # Added List
 from datetime import datetime
 from .models import UserRole, BrokerPreference # Import enums from models
 
@@ -110,3 +110,87 @@ class IndexDataPoint(BaseModel):
 class LiveIndicesResponse(BaseModel):
     data: list[IndexDataPoint]
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp when the data was fetched/served by the API")
+
+
+# AngelOne Specific Schemas
+class AngelOneFund(BaseModel):
+    actid: Optional[str] = None # Account ID, might be same as client code
+    amount: Optional[str] = None # String amount, needs conversion to float
+    bankactno: Optional[str] = None
+    bankid: Optional[str] = None
+    bankname: Optional[str] = None
+    branchid: Optional[str] = None
+    # Add other fund details as per AngelOne API response
+    # Example fields often found:
+    availablecash: Optional[float] = Field(None, alias="availableCash")
+    marginutilized: Optional[float] = Field(None, alias="marginUtilized")
+    collateral: Optional[float] = None
+    net: Optional[float] = None # Net available margin
+
+    class Config:
+        allow_population_by_field_name = True
+        orm_mode = True
+
+class AngelOneProfile(BaseModel):
+    clientcode: Optional[str] = Field(None, alias="clientCode")
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    mobileno: Optional[str] = Field(None, alias="mobileNo")
+    exchanges: Optional[list[str]] = None # e.g., ["nse", "bse", "mcx"]
+    products: Optional[list[str]] = None # e.g., ["CNC", "NRML", "MIS"]
+    # lastlogintime: Optional[str] = Field(None, alias="lastLoginTime") # Example
+    broker: Optional[str] = Field(None, description="Broker ID/Name, e.g., Angel Broking")
+    # funds: Optional[AngelOneFund] = None # If funds are nested under profile
+
+    class Config:
+        allow_population_by_field_name = True
+        orm_mode = True
+
+# If funds are separate from profile or a more detailed structure:
+class AngelOneUserFunds(BaseModel): # More comprehensive fund details
+    availablecash: Optional[float] = Field(None, alias="availablecash") # SmartAPI often uses all lowercase
+    marginutilized: Optional[float] = Field(None, alias="marginutilized")
+    collateral: Optional[float] = Field(None, alias="collateral")
+    net: Optional[float] = Field(None, alias="net") # Net available margin
+    # Potentially many more fields like payinamount, payoutamount, MTM, unrealizedprofitloss etc.
+    # For now, keeping it concise based on common needs.
+
+    class Config:
+        allow_population_by_field_name = True # Allow 'availablecash' from API to map to 'availablecash' field
+        # orm_mode = True # If this data is ever directly mapped from an ORM model
+
+class AngelOneProfileResponse(BaseModel): # Combining profile and funds for a typical response
+    profile: AngelOneProfile
+    funds: AngelOneUserFunds # Assuming funds are fetched and combined here
+
+    class Config:
+        orm_mode = True
+
+
+class AngelOneHolding(BaseModel):
+    tradingsymbol: Optional[str] = Field(None, alias="tradingSymbol")
+    exchange: Optional[str] = None
+    isin: Optional[str] = None
+    quantity: Optional[int] = None
+    averageprice: Optional[float] = Field(None, alias="averagePrice")
+    ltp: Optional[float] = None # Last Traded Price
+    closeprice: Optional[float] = Field(None, alias="close") # Previous day's close price
+    pnl: Optional[float] = Field(None, alias="pnl") # Overall Profit/Loss
+    # dayChange: Optional[float] = None # Calculated if needed
+    # dayChangePercentage: Optional[float] = None # Calculated if needed
+    producttype: Optional[str] = Field(None, alias="productType")
+    # Add more fields as per AngelOne API response, e.g., t1quantity, realisedquantity, etc.
+    # symboltoken: Optional[str] = Field(None, alias="symbolToken")
+    # haircut: Optional[float] = None
+    # usedquantity: Optional[int] = Field(None, alias="usedQuantity")
+    # collateralquantity: Optional[int] = Field(None, alias="collateralQuantity")
+
+    class Config:
+        allow_population_by_field_name = True
+        orm_mode = True
+
+class AngelOneHoldingsResponse(BaseModel):
+    data: Optional[List[AngelOneHolding]] = None # AngelOne might return a list directly under 'data' or just a list
+
+    class Config:
+        orm_mode = True

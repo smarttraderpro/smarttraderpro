@@ -26,7 +26,8 @@ This project is divided into several key components:
 
 *   **Backend**: Python (FastAPI)
 *   **Database**: PostgreSQL
-*   **Market Data**: `yfinance` library (for fetching stock/index data)
+*   **Market Data**: `yfinance` library
+*   **Broker SDKs**: `smartapi-python` (for AngelOne integration)
 *   **Web Frontend**: ReactJS
 *   **Windows Desktop Frontend**: Electron (with HTML/JS/CSS, potentially a framework like React/Vue)
 *   **Mobile Frontend**: Flutter (Dart)
@@ -40,9 +41,15 @@ This project is divided into several key components:
     *   Backend service to fetch live data for Nifty, BankNifty, Sensex, and India VIX using the `yfinance` library.
     *   API endpoint (`/api/v1/market/live-indices`) to serve this data.
     *   Web dashboard displays Symbol, LTP, Change (points & %), with periodic refresh.
+*   **Broker Integration (AngelOne - Phase 1)**:
+    *   Securely store user's AngelOne API Key, Secret, and Client ID (encrypted).
+    *   Backend service (`AngelOneService`) to handle authentication with AngelOne (using SDK, expects PIN/TOTP on demand for new sessions) and fetch data.
+    *   API endpoints (`/api/v1/angelone/profile`, `/api/v1/angelone/holdings`) to retrieve user's AngelOne profile/funds and holdings.
+    *   Frontend UI in "Profile & Settings" to input AngelOne credentials.
+    *   Frontend "Portfolio" page to display fetched AngelOne data, with a modal to prompt for PIN/TOTP if required by the backend for session renewal.
 *   **Development Infrastructure**:
     *   Docker setup for backend and PostgreSQL database.
-    *   Unit tests for backend authentication and user modules.
+    *   Unit tests for backend authentication, user modules, and initial market data service/endpoints.
     *   Placeholder projects for Electron and Flutter frontends.
     *   Basic project and API documentation.
 
@@ -158,6 +165,23 @@ Alternatively, use Docker Compose to run the backend and PostgreSQL database:
     flutter run
     ```
     Refer to `mobile_app/README.md` for more details if a full Flutter project is initialized.
+
+### Broker Account Setup (AngelOne Example)
+
+To use features integrated with your AngelOne account:
+
+1.  **Obtain API Credentials from AngelOne:**
+    *   Register as a developer on the [AngelOne SmartAPI portal](https://smartapi.angelbroking.com/).
+    *   Create an app to get your API Key and Secret Key.
+    *   You will also need your AngelOne Client ID (the user ID you use to log into AngelOne).
+2.  **Configure in Smart Trader Hub:**
+    *   Log into Smart Trader Hub.
+    *   Navigate to "Profile & Settings".
+    *   Select "AngelOne" as your preferred broker.
+    *   Enter your AngelOne Client ID, API Key, and API Secret into the provided form and save. These are stored encrypted.
+3.  **Using AngelOne Features (e.g., Portfolio View):**
+    *   When you access features that require AngelOne data (like the "Portfolio" page), the application will attempt to connect to AngelOne using your stored credentials.
+    *   **Important:** For new sessions, AngelOne typically requires your trading account PIN/Password and a live TOTP (from your authenticator app). If needed, the Smart Trader Hub application will prompt you to enter these details securely. These are used for the current session only and are **not** stored by Smart Trader Hub.
 
 ## API Documentation
 
