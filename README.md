@@ -26,11 +26,26 @@ This project is divided into several key components:
 
 *   **Backend**: Python (FastAPI)
 *   **Database**: PostgreSQL
+*   **Market Data**: `yfinance` library (for fetching stock/index data)
 *   **Web Frontend**: ReactJS
 *   **Windows Desktop Frontend**: Electron (with HTML/JS/CSS, potentially a framework like React/Vue)
 *   **Mobile Frontend**: Flutter (Dart)
 *   **API Communication**: RESTful APIs
 *   **Containerization**: Docker (for backend and database)
+
+## Implemented Features (Phase 1)
+
+*   **User Authentication**: Secure signup (with email OTP verification and account activation), login, role-based access (basic setup), profile management (`/users/me`), secure storage of (mock) broker API keys via Fernet encryption.
+*   **Live Market Dashboard (Backend & Web UI)**:
+    *   Backend service to fetch live data for Nifty, BankNifty, Sensex, and India VIX using the `yfinance` library.
+    *   API endpoint (`/api/v1/market/live-indices`) to serve this data.
+    *   Web dashboard displays Symbol, LTP, Change (points & %), with periodic refresh.
+*   **Development Infrastructure**:
+    *   Docker setup for backend and PostgreSQL database.
+    *   Unit tests for backend authentication and user modules.
+    *   Placeholder projects for Electron and Flutter frontends.
+    *   Basic project and API documentation.
+
 
 ## Getting Started
 

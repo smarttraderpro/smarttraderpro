@@ -17,3 +17,5 @@ httpx # For making async requests in tests
 
 # For encryption
 cryptography
+yfinance
+pytest-asyncio # For testing async code with pytest

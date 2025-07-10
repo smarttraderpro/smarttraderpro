@@ -57,6 +57,12 @@ export const updateUserBrokerCredentials = (credentialsData) => {
 };
 
 
+// Market Data API calls
+export const fetchLiveIndices = () => {
+  return apiClient.get('/market/live-indices');
+};
+
+
 // Add other API functions as needed for different modules
 
 export default apiClient; // Default export for general use if preferred

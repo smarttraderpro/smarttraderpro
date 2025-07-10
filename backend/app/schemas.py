@@ -88,3 +88,25 @@ class BrokerAPICredentialsUpdate(BaseModel):
     # api_secret: Optional[str] = Field(None, description="Broker API Secret")
     # access_token: Optional[str] = Field(None, description="Broker Access Token (if applicable)")
     # refresh_token: Optional[str] = Field(None, description="Broker Refresh Token (if applicable)")
+
+
+# Market Data Schemas
+class IndexDataPoint(BaseModel):
+    symbol: str = Field(..., description="Trading symbol of the index (e.g., ^NSEI, NIFTY 50)")
+    ltp: float = Field(..., description="Last Traded Price")
+    change: float = Field(..., description="Change in points from previous close")
+    percent_change: float = Field(..., alias="percentChange", description="Percentage change from previous close")
+    # previous_close: Optional[float] = Field(None, alias="previousClose", description="Previous day's closing price")
+    # open_price: Optional[float] = Field(None, alias="openPrice", description="Today's open price")
+    # day_high: Optional[float] = Field(None, alias="dayHigh", description="Today's high price")
+    # day_low: Optional[float] = Field(None, alias="dayLow", description="Today's low price")
+    # volume: Optional[int] = Field(None, description="Trading volume for the day")
+    # last_update_timestamp: Optional[datetime] = Field(None, alias="lastUpdateTime", description="Timestamp of the last data update")
+
+    class Config:
+        orm_mode = True # For potential future ORM mapping if we store this data
+        allow_population_by_field_name = True # Allows using 'percentChange' as input for 'percent_change'
+
+class LiveIndicesResponse(BaseModel):
+    data: list[IndexDataPoint]
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp when the data was fetched/served by the API")
